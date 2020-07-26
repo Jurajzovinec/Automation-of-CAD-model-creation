@@ -22,10 +22,11 @@ of models in to master model according to information from ERP system.
 * Feedback of process is delivered to user, to save postprocess time of finalization of CAD master model.
 
 ## Technologies
+
  This project uses Creoson application from Simplified Logic inc. This application
  sets up tiny micro server through which is possible to send requests in json file format 
  over the HTTP protocol. Those request are converted to API of CAD software. Core code `KM_Assembly_Automation.py`
- is written in python language, with use of creopyson library by Benjamin C.
+ is written in python language, with use of creopyson library by Benjamin C. This core code uses procedural approach.
 
 ## Dependencies and Folders
 Except direct dependency on performance of Creoson application, automation of mastermodel has
