@@ -1,19 +1,20 @@
 # Automation of CAD Model Creation 
 This application is dedicated to creation of CAD master model with use of 
-creoson application and creopyson API. Implementation of this application
+creoson application and creopyson python library. Implementation of this application
 happened in Kraussmaffei Technologies company, which focuses on 
 production of injection moulding machines. Application automates manual 
 process of creation CAD master model. This process is based on assembling 
 of models in to master model according to information from ERP system. 
 
 ## Table of Contents
+
 * [Workflow of application](#workflow-of-application)
 * [Technologies](#technologies)
 * [Dependencies and Folders](#dependencies-and-folders)
 
 ## Workflow of application 
  
-* User makes sure creoson application is initialized and set up.
+* User makes sure that creoson application is initialized and set up.
   Then is application allowed to run.
 * User selects source master model and order number for automation process.
 * Automation loads bill of material from ERP system. After it takes control
@@ -40,11 +41,12 @@ special signs etc.)
 file is in every sub-folder, and consists information of assembly groups which will be spare in process of automation 
 due to low data quality of its CAD models (such as incorrect naming conventions).
 * `FeedbackFolder` is folder where information of process are stored. After every automation there are screenshots
-of model groups which should be in CAD model according to bill of material list, but various kind of errors those
+of model groups which should be in CAD model according to bill of material list, but due to various kind of errors those
 CAD models had not been assembled to CAD master model.
+* `ErpBom` folder is used to store bill of material from ERP system
 * `IconPictures` folder contains icons and picture which are used in graphical user interface of 
 applications
-* `ErpBom` folder is used to store bill of material from ERP system
+
 
 
 
