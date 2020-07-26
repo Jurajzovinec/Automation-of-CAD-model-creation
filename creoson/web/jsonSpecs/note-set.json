@@ -1,0 +1,107 @@
+{
+  "spec" : {
+    "function_description" : "Set the text of a model or drawing note",
+    "command" : "note",
+    "function" : "set",
+    "notes" : [ "The location parameter can used to position a new note, or to change the position of an existing note.", "If the text contains Creo Symbols or other non-ASCII text, you must Base64-encode the value and set encoded to true.", "You may be able to avoid Base64-encoding symbols by using Unicode for the binary characters, for example including \\u0001#\\u0002 in the value to insert a plus/minus symbol.", "Embed newlines in the value for line breaks" ],
+    "request" : [ {
+      "name" : "file",
+      "type" : "string",
+      "description" : "File name",
+      "default" : "The currently active model or drawing",
+      "wildcards_allowed" : true
+    }, {
+      "name" : "name",
+      "type" : "string",
+      "description" : "Note name",
+      "required" : true
+    }, {
+      "name" : "value",
+      "type" : "string",
+      "description" : "Note text with parameters not expanded",
+      "default" : "Clears the note if missing"
+    }, {
+      "name" : "encoded",
+      "type" : "boolean",
+      "description" : "Value is Base64-encoded",
+      "default" : "false"
+    }, {
+      "name" : "location",
+      "type" : "object:JLPoint",
+      "description" : "Coordinates for the note placement in Drawing Units",
+      "default" : "If missing and this is a new note, note will be placed at 0, 0"
+    } ],
+    "response" : [ ]
+  },
+  "examples" : [ {
+    "request" : {
+      "sessionId" : "~sessionId~",
+      "command" : "note",
+      "function" : "set",
+      "data" : {
+        "file" : "box.prt",
+        "name" : "Note_23",
+        "value" : "This is a test note\nWith two lines"
+      }
+    },
+    "response" : {
+      "status" : {
+        "error" : false
+      }
+    }
+  }, {
+    "request" : {
+      "sessionId" : "~sessionId~",
+      "command" : "note",
+      "function" : "set",
+      "data" : {
+        "file" : "box.prt",
+        "name" : "Note_17",
+        "value" : "ZnJpZW5kbHkgASMCMy41",
+        "encoded" : true
+      }
+    },
+    "response" : {
+      "status" : {
+        "error" : false
+      }
+    }
+  }, {
+    "request" : {
+      "sessionId" : "~sessionId~",
+      "command" : "note",
+      "function" : "set",
+      "data" : {
+        "file" : "box.prt",
+        "name" : "Note_17",
+        "value" : "test \u0001#\u00023.5",
+        "encoded" : false
+      }
+    },
+    "response" : {
+      "status" : {
+        "error" : false
+      }
+    }
+  }, {
+    "request" : {
+      "sessionId" : "~sessionId~",
+      "command" : "note",
+      "function" : "set",
+      "data" : {
+        "file" : "box.prt",
+        "name" : "newnote",
+        "value" : "This is a test note\nWith two lines",
+        "location" : {
+          "x" : 10.0,
+          "y" : 3.25
+        }
+      }
+    },
+    "response" : {
+      "status" : {
+        "error" : false
+      }
+    }
+  } ]
+}

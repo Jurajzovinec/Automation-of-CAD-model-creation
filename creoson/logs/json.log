@@ -1,0 +1,6 @@
+2020-07-23 12:36:20.753: Request: 
+    {"sessionId": "", "command": "connection", "function": "connect", "data": null}
+2020-07-23 12:36:21.169:     {"status":{"error":false},"sessionId":"8648124248104533478"}
+2020-07-23 12:38:44.595: Request: 
+    {"sessionId": "", "command": "connection", "function": "connect", "data": null}
+2020-07-23 12:38:44.603:     {"status":{"error":false},"sessionId":"6640579236791863123"}
