@@ -660,7 +660,7 @@ def read_ZS63_pair_with_CAD(pair_also=False, test=False):
         #special_sign = None
         #special_sign=False
 
-    with open('ZS_63_source_folder\\zs_63.txt') as zs_data:
+    with open('ErpBom\\zs_63.txt') as zs_data:
 
         zs_63_raw = zs_data.readlines()
 
@@ -1174,7 +1174,7 @@ def load_zs_63():
     """This function loads zs63 SAP transaction - should be converted to SAP scripting technique"""
 
     global zs_63_folder
-    zs_63_folder = os.path.dirname(sys.argv[0]) + '/ZS_63_source_folder'
+    zs_63_folder = os.path.dirname(sys.argv[0]) + '/ErpBom'
     global feedback_folder
     feedback_folder = os.path.dirname(sys.argv[0]) + '/FeedbackFolder'
 
@@ -1186,7 +1186,7 @@ def load_zs_63():
     sap_source.destroy()
 
     current_folder_path = sap_source.filename
-    final_folder_path = os.path.dirname(sys.argv[0]) + '\\ZS_63_source_folder\\ZS_63.txt'
+    final_folder_path = os.path.dirname(sys.argv[0]) + '\\ErpBom\\ZS_63.txt'
 
     try:
         shutil.copyfile(current_folder_path, final_folder_path)
