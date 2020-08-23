@@ -7,10 +7,12 @@ import logging
 import time
 import shutil
 import csv
+import math
 from difflib import SequenceMatcher
 from PIL import ImageTk, Image
 from tkinter import messagebox
 from tkinter import filedialog
+# TODO: Change deleting model for suppressing
 
 # ---Logging---
 try:
@@ -44,14 +46,14 @@ class Application(tkinter.Frame):
 
     def set_background_theme(self):
 
-        self.background = ImageTk.PhotoImage(Image.open("IconPictures/Graphical_User_Int_Theme.png"))
+        self.background = ImageTk.PhotoImage(Image.open(icons_folder_path+"Graphical_User_Int_Theme.png"))
         self.background_theme = tkinter.Label(self.master, image=self.background).grid(row=0, column=0, rowspan=100, columnspan=100)
 
     def create_buttons(self):
 
-        self.run_button = CreateControlButton(parent=self, row_grid=13, column_grid=0, command=self.close_graphical_user_interface, icon_name="run_automation.png")
+        self.run_button = CreateControlButton(parent=self, row_grid=13, column_grid=0, command=assembling_process, icon_name="run_automation.png")
         self.run_button.disable_this_button()
-        self.compare_zs_63_button = CreateControlButton(parent=self, row_grid=13, column_grid=1, command=development_function, icon_name="compare_zs_63.png")
+        self.compare_zs_63_button = CreateControlButton(parent=self, row_grid=13, column_grid=1, command=compare_with_zs63_file_button, icon_name="compare_zs_63.png")
         self.reset_button = CreateControlButton(parent=self, row_grid=13, column_grid=2, command=self.reset_graphical_user_interface, icon_name="reset.png")
         self.feedback_button = CreateControlButton(parent=self, row_grid=14, column_grid=0, command=self.open_feedback_folder, icon_name="feedback_folder.png")
         self.source_folder_button = CreateControlButton(parent=self, row_grid=14, column_grid=1, command=self.open_database_folder, icon_name="source_folder.png")
@@ -87,11 +89,11 @@ class Application(tkinter.Frame):
         self.run_button.enable_this_button()
         self.machine_type_drop_down_menu.disable_this_dropdown_menu()
         self.confirm_selected_machinetype.disable_this_button()
-        selected_machine_type = self.machine_type_drop_down_menu.what_is_picked_option()
+        self.selected_machine_type = self.machine_type_drop_down_menu.what_is_picked_option()
 
         # Set up of Excel Workbook
         input_workbook = xlrd.open_workbook(database_path)
-        self.input_worksheet = input_workbook.sheet_by_name(selected_machine_type)
+        self.input_worksheet = input_workbook.sheet_by_name(self.selected_machine_type)
 
         self.list_master_models = []
         self.positions_master_models = []
@@ -129,7 +131,7 @@ class Application(tkinter.Frame):
 
         # For to me unknown reason application did not enabled button with run_button.enable_this_button (even though it works with confirmation button)
         # There for instance of this button is re-created.
-        self.run_button = CreateControlButton(parent=self, row_grid=13, column_grid=0, command=self.close_graphical_user_interface, icon_name="run_automation.png")
+        self.run_button = CreateControlButton(parent=self, row_grid=13, column_grid=0, command=assembling_process, icon_name="run_automation.png")
         self.source_assembly_name = self.list_cad_models.what_is_picked_option()
 
         # Lists of newly created values - These properties have to be predifined.
@@ -178,13 +180,10 @@ class Application(tkinter.Frame):
             if self.input_worksheet.cell_value(row_value, 6):
                 list_second_powerpacks.append(self.input_worksheet.cell_value(row_value, 6))
 
-        print(properties)
+
         # Removing non relevant properties is going to happen with lambda following function
         filtering_properties = filter(lambda x: isinstance(x['value'], list) and len(x['value']) > 1 or isinstance(x['value'], str), properties)
         properties = list(filtering_properties)
-        print(list(filtering_properties))
-        for each in properties:
-            print(each)
 
         self.create_dropdown_menu_for_properties(self, properties)
 
@@ -253,6 +252,9 @@ class CreateControlButton:
     def enable_this_button(self):
         self.parent.button_obj.config(state='normal')
 
+    def destroy_this_button(self):
+        self.parent.button_obj.destroy()
+
 
 class CreateDropDownMenu:
 
@@ -298,12 +300,14 @@ class CreoAPI:
     # connect, create bom information (check whether resumed models are innit), check skeleton exists,
     # take care of flow control
     # possible names - use quicker functions - may slow down
-    def __init__(self):
+    def __init__(self, open_master=True):
         self.creo_client = creopyson.Client()
         self.setup()
         self.bill_of_material = []
-        self.zs_63 = Zs63(self.current_master_model())
         self.paired_bill_of_material = []
+        self.zs_63 = Zs63()
+        if open_master:
+            self.open_picked_master_model()
         self.resume_all_groups(order_number_only=True)
 
         print("Creo API has been initialized.")
@@ -323,6 +327,9 @@ class CreoAPI:
                 logger.critical("Creoson is not running. Start Creoson before starting Automation app.")
                 exit()
 
+    def open_picked_master_model(self):
+        creopyson.file_open(self.creo_client, file_=app.list_cad_models.what_is_picked_option())
+
     def current_master_model(self):
         return creopyson.file_get_fileinfo(self.creo_client)['file']
 
@@ -333,6 +340,7 @@ class CreoAPI:
 
         """This method uses list-features method to create structured Bill of Material"""
 
+        self.clear_bill_of_material()
         current_master_model = self.current_master_model()
         current_order_number = self.current_order_number()
 
@@ -370,7 +378,7 @@ class CreoAPI:
             each_dict['level_of_master_model_tree'] = level_of_master_model_tree
         self.bill_of_material.extend(bom_opened_group)
         # remove duplicates ->
-        self.bill_of_material = d = [i for n, i in enumerate(self.bill_of_material) if i not in self.bill_of_material[n + 1:]]
+        self.bill_of_material = [i for n, i in enumerate(self.bill_of_material) if i not in self.bill_of_material[n + 1:]]
         return bom_opened_group
 
     def create_master_model_bill_of_material_no_suppressed(self):
@@ -574,7 +582,6 @@ class CreoAPI:
             picked_option = picked_dictionary.what_is_picked_option()
             print(f'Picked powerpack is {picked_option}.')
             dimensions_to_remove = picked_dictionary.return_non_picked_values()
-            print(dimensions_to_remove)
             self.determine_whether_group_consist_powerpack(list_of_powerpacks=list_powerpacks, picked_powerpack=picked_option)
 
             # Filtering out powerpacks is very difficult task since their names are 10, 15, 01 or 02. However there is rule that sign of powerpack is earlier
@@ -590,9 +597,7 @@ class CreoAPI:
             picked_option = picked_dictionary.what_is_picked_option()
             print(f'Picked secondary powerpack is {picked_option}.')
             dimensions_to_remove = picked_dictionary.return_non_picked_values()
-            print(dimensions_to_remove)
             self.determine_whether_group_consist_powerpack(list_of_powerpacks=list_second_powerpacks, picked_powerpack=picked_option)
-
 
         if any(dictionary['property'] == 'list_primary_plast' for dictionary in properties):
             list_primary_plast = next(item for item in properties if item['property'] == 'list_primary_plast')['value']
@@ -600,7 +605,6 @@ class CreoAPI:
             picked_option = picked_dictionary.what_is_picked_option()
             print(f'Picked primary plast is {picked_option}.')
             dimensions_to_remove = picked_dictionary.return_non_picked_values()
-            print(dimensions_to_remove)
             # remove groups containing any of dimensions to remove
             # important to store value into tuple - self.material is loosing its elements in this process - which causes overlaps while it iterating
             # tuple is immutable - therefore will not change (avoiding overlaps)
@@ -641,16 +645,16 @@ class CreoAPI:
                         number_position = (bom_dict['name'].index('c')+1)
                         int(bom_dict['name'][number_position])
                     except ValueError:
-                        print('is not integer')
+                        pass
                     else:
                         bom_dict['group_type'] = 'c'
                 elif 'sa' in bom_dict['name'][:-10] and '.asm' in bom_dict['name']:
                     bom_dict['group_type'] = 'sa'
 
-    def rename_config_control(self, boolean):
-        if boolean == "yes":
+    def rename_config_control(self, boolean=True):
+        if boolean:
             creopyson.creo_set_config(client=self.creo_client, name="let_proe_rename_pdm_objects", value="yes")
-        elif boolean == "no":
+        else:
             creopyson.creo_set_config(client=self.creo_client, name="let_proe_rename_pdm_objects", value="no")
 
     def determine_whether_group_consist_powerpack(self, list_of_powerpacks, picked_powerpack):
@@ -705,8 +709,8 @@ class CreoAPI:
                 try:
                     try_model = each_dict['name'].replace(found_powerpack, each_correct)
                 except KeyError:
-                    print(each_dict)
-                if creopyson.file_exists(self.creo_client, file_=try_model):
+                    pass
+                if self.check_whether_model_exists(self, erp_material_number=try_model):
                     print(f"Such a model exists {try_model}.")
                     try:
                         next(item for item in self.bill_of_material if item['name'] == try_model)
@@ -729,7 +733,7 @@ class CreoAPI:
             if each_dict['test_result'] == 'remove':
                 self.try_delete_model(model_to_delete=each_dict['name'])
             if each_dict['test_result'] == 'rename_to_correct':
-                print(each_dict)
+                pass
                 found_powerpack = each_dict['powerpack']
                 self.open_model_and_rename_groups(component_name=each_dict['name'], replace_from=found_powerpack, replace_to=powerpacks_to_keep[1])
                 print(f"Due to non-existing group {each_dict['name']} has been renamed.")
@@ -760,7 +764,7 @@ class CreoAPI:
         parent_dict = next(x for x in self.bill_of_material if x['name'] == component_name)
         filter_children_only_list.append(parent_dict)
 
-        self.rename_config_control("yes")
+        self.rename_config_control(boolean=True)
         for every_component in filter_children_only_list:
             if replace_from in every_component['name']:
                 new_name = every_component['name'].replace(replace_from, replace_to)
@@ -797,17 +801,27 @@ class CreoAPI:
 
                 if parent_csy != 'CSY does not exist' and child_csy != 'CSY does not exist':
                     creopyson.file_assemble(self.creo_client, into_asm=cad_parent_model, file_=child_model, constraints=[{"asmref": parent_csy, "compref": child_csy, "type": "csys"}])
+                    logger.info(f"Model {child_model} has been assembled to {cad_parent_model}")
+                    print(f"Model {child_model} has been assembled to {cad_parent_model}")
 
-                if parent_csy == 'CSY does not exist' and child_csy != 'CSY does not exist':
+                elif parent_csy == 'CSY does not exist' and child_csy != 'CSY does not exist':
                     # TODO: Check whether skeleton exists method might be enhanced.
                     skeleton_information = self.check_whether_skeleton_exists(cad_parent_model)
                     if skeleton_information['csy'] != 'CSY does not exist':
                         creopyson.file_assemble(self.creo_client, file_=child_model, into_asm=cad_parent_model, ref_model=skeleton_information['skel_name'],
                         constraints=[{"asmref": skeleton_information['csy'], "compref": child_csy, "type": "csys"}])
+                        logger.info(f"Model {child_model} has been assembled to {cad_parent_model}")
+                        print(f"Model {child_model} has been assembled to {cad_parent_model}")
                     else:
                         creopyson.file_assemble(self.creo_client, into_asm=cad_parent_model, file_=child_model, constraints=[{"type": "fix"}], package_assembly=True)
+                        logger.info(f"Model {child_model} has been assembled to {cad_parent_model}")
+                        print(f"Model {child_model} has been assembled to {cad_parent_model}")
                 else:
                     creopyson.file_assemble(self.creo_client, into_asm=cad_parent_model, file_=child_model, constraints=[{"type": "fix"}], package_assembly=True)
+                    logger.info(f"Model {child_model} has been assembled to {cad_parent_model}")
+                    print(f"Model {child_model} has been assembled to {cad_parent_model}")
+        else:
+            print(f"Model {erp_material_number} is already in {cad_parent_model}")
 
     def pick_csy(self, cad_parent_model, checked_model, mx_optimization=False):
 
@@ -866,8 +880,7 @@ class CreoAPI:
                             "ceil": max(boundering_values)
                         }
                         mx_csys_objects.append(current_mx_csy_object)
-                        print(current_mx_csy_object)
-                        print("Above is csy object")
+                        print(f"MX Optimization - csy object is {current_mx_csy_object}.")
                     if len(mx_csys_objects) > 1:
                         for each_csy_object in mx_csys_objects:
                             if zs_63_injection_unit >= each_csy_object["floor"] and zs_63_injection_unit <= each_csy_object["ceil"]:
@@ -881,17 +894,23 @@ class CreoAPI:
 
     def check_whether_model_exists(self, erp_material_number):
         """This method tests whether ERP material number exists in Windchill and if exists it will assign its modelname to model_name variable"""
-        model_name = ''
+
         erp_material_number = erp_material_number.replace('.prt', '')
         erp_material_number = erp_material_number.replace('.asm', '')
-        if creopyson.file_exists(self.creo_client, file_=erp_material_number + '.prt'):
+        try:
+            creopyson.file_open(self.creo_client, file_=erp_material_number + '.prt', display=False)
             model_name = erp_material_number + '.prt'
             print(f'Yes material number exists ! Model name is {model_name}.')
             logger.info(f'Yes material number exists ! Model name is {model_name}.')
-        if creopyson.file_exists(self.creo_client, file_=erp_material_number + '.asm'):
+        except RuntimeError:
+            pass
+        try:
+            creopyson.file_open(self.creo_client, file_=erp_material_number + '.asm', display=False)
             model_name = erp_material_number + '.asm'
             print(f'Yes material number exists ! Model name is {model_name}.')
             logger.info(f'Yes material number exists ! Model name is {model_name}.')
+        except RuntimeError:
+            model_name = ''
         return model_name.lower()
 
     def check_whether_model_name_is_in_assembly(self, parent, model_name_wild_card):
@@ -926,14 +945,23 @@ class CreoAPI:
             list_without_skeletons.append(every_dict["file"])
         for every_file in list_without_skeletons:
             list_with_skeletons.remove(every_file)
+
         if len(list_with_skeletons) == 0:
             messagebox.showerror('Automation status', 'Automation aborted! There is not skeleton model in mastermodel.')
             exit()
         elif len(list_with_skeletons) >= 1:
             cad_skeleton_name = list_with_skeletons[0]
             skeleton_information['skel_name'] = cad_skeleton_name
-        skeleton_information['csy'] = self.pick_csy(cad_parent_model, cad_skeleton_name)
-        print(skeleton_information)
+
+        if self.current_master_model() == cad_parent_model:
+            creopyson.file_open(self.creo_client, file_=cad_skeleton_name)
+            if any(csy['name'] == 'K_M2' for csy in creopyson.feature_list(self.creo_client, type_='COORDINATE SYSTEM')):
+                skeleton_information['csy'] = 'K_M2'
+            else:
+                skeleton_information['csy'] = (creopyson.feature_list(self.creo_client, type_='COORDINATE SYSTEM')[0])['name']
+        else:
+            skeleton_information['csy'] = self.pick_csy(cad_parent_model, cad_skeleton_name)
+            print(f"Skeleton exists, skeleton information is {skeleton_information}.")
 
         return skeleton_information
 
@@ -945,7 +973,7 @@ class CreoAPI:
         for every_component in self.bill_of_material:
             for every_number in list_of_numbers:
                 if "_" + str(every_number) + "_" + gmxxxx in every_component:
-                    self.rename_config_control("yes")
+                    self.rename_config_control(boolean=True)
                     new_name = every_component.replace("_" + str(every_number) + "_" + gmxxxx, "-" + str(every_number) + "_" + gmxxxx)
                     try:
                         creopyson.file_rename(self.creo_client, file_=every_component, new_name=new_name, onlysession=True)
@@ -953,7 +981,7 @@ class CreoAPI:
                         logger.info('Repaired convention in model = ' + new_name)
                     except:
                         pass
-                    self.rename_config_control("no")
+                    self.rename_config_control(boolean=False)
 
     def try_remove_from_ws(self, filename_to_remove):
         """This method removes unnecessary models from workspace."""
@@ -976,9 +1004,13 @@ class CreoAPI:
         """This function creates new copy of master model."""
 
         new_number = order_number_entry.get()
-        print(new_number)
         order_number = self.current_order_number()
-        self.rename_config_control("yes")
+        self.rename_config_control(boolean=True)
+
+        current_master_model = self.current_master_model()
+        new_master_model = current_master_model.replace(order_number, new_number)
+        creopyson.file_rename(self.creo_client, file_=self.current_master_model(), new_name=new_master_model, onlysession=True)
+
         for every_component in self.bill_of_material:
             if order_number in every_component['name']:
                 new_name = every_component['name'].replace(order_number, new_number)
@@ -991,19 +1023,18 @@ class CreoAPI:
                     logger.exception("message")
                 else:
                     self.change_parameter_in_bill_of_material(key='name', new_value=new_name, feat_id=every_component['feat_id'])
-        self.rename_config_control("no")
-
-    def run_with_order_number(self):
-
-        creopyson.file_open(self.creo_client, )
+        self.rename_config_control(boolean=False)
 
     def zs_63_pairing(self):
 
         self.zs_63.transform_zs_63()
         self.paired_bill_of_material = self.zs_63.pair_converted_zs_63_with_cad_master_model(self.bill_of_material)
 
-    def get_zs63_file(self):
-        pass
+    def remove_from_bill_of_material(self, remove_from_bill):
+        try:
+            self.bill_of_material.remove(remove_from_bill)
+        except:
+            pass
 
     def remove_unnecessary_material_numbers(self):
 
@@ -1032,21 +1063,177 @@ class CreoAPI:
                         logger.info(f"This group is avoided {each_dict['name']} in {each_dict['parent']}. - In zs_63")
                     else:
                         creopyson.file_open(self.creo_client, file_=each_dict['parent'])
-                        creopyson.feature_delete(self.creo_client, name=each_dict['name'])
-                        self.bill_of_material.remove(each_dict)
+                        self.try_delete_model(model_to_delete=each_dict['name'])
+                        self.remove_from_bill_of_material(remove_from_bill=each_dict)
                         print(f"This group is remove {each_dict['name']} from {each_dict['parent']}. - In zs_63")
                         logger.info(f"This group is remove {each_dict['name']} from {each_dict['parent']}. - In zs_63")
+
+    def create_coordinate_system(self, constraint_to, name_of_csy):
+
+        list_csys_model = creopyson.feature_list(self.creo_client, type_='COORDINATE SYSTEM', no_comp=False)
+        if not any(x['name'] == name_of_csy for x in list_csys_model):
+            create_csy_script = "~ Command `ProCmdDatumCsys` ;\
+                                 ~ Open `storage_conflicts` `OptMenu1`;\
+                                 ~ Close `storage_conflicts` `OptMenu1`;\
+                                 ~ Select `storage_conflicts` `OptMenu1` 1 `resolution1`;\
+                                 ~ Activate `storage_conflicts` `OK_PushButton`;\
+                                 ~ Trigger `Odui_Dlg_00` `t1.OriginPlacement` 2 `0` `constr`;\
+                                 ~ Focus `Odui_Dlg_00` `t1.OriginPlacement`;\
+                                 ~ FocusIn `Odui_Dlg_00` `t1.OriginPlacement`;\
+                                 ~ Select `Odui_Dlg_00` `t1.OriginPlacement` 2 `0` `constr`;\
+                                 ~ Focus `Odui_Dlg_00` `t1.OriginPlacement`;\
+                                 ~ RButtonArm `Odui_Dlg_00` `t1.OriginPlacement` 2 `0` `constr`;\
+                                 ~ PopupOver `Odui_Dlg_00` `t1.OriginCollector_Wmo01` 1 `t1.OriginPlacement`;\
+                                 ~ Open `Odui_Dlg_00` `t1.OriginCollector_Wmo01`;\
+                                 ~ Trigger `Odui_Dlg_00` `t1.OriginPlacement` 2 `` ``;\
+                                 ~ Timer `UI Desktop` `UI Desktop` `CollectorWdg_FocusTimer`;\
+                                 ~ Close `Odui_Dlg_00` `t1.OriginCollector_Wmo01`;\
+                                 ~ Activate `Odui_Dlg_00` `t1.DelOne_Wmo01`;\
+                                 ~ Trigger `Odui_Dlg_00` `t1.OriginPlacement` 2 `` ``;\
+                                 ~ FocusOut `Odui_Dlg_00` `t1.OriginPlacement`;\
+                                 ~ Command `ProCmdMdlTreeSearch` ;\
+                                 ~ Select `selspecdlg0` `RuleTab` 1 `Attributes`;\
+                                 ~ Open `selspecdlg0` `SelOptionRadio`;\
+                                 ~ Close `selspecdlg0` `SelOptionRadio`;\
+                                 ~ Select `selspecdlg0` `SelOptionRadio` 1 `Coord Sys`;\
+                                 ~ Update `selspecdlg0` `ExtRulesLayout.ExtBasicNameLayout.BasicNameList` \
+                                 `K_M2`;~ Activate `selspecdlg0` `EvaluateBtn`;\
+                                 ~ Activate `selspecdlg0` `ApplyBtn`;~ Activate `selspecdlg0` `CancelButton`;\
+                                 ~ FocusIn `Odui_Dlg_00` `t1.OriginPlacement`;\
+                                 ~ Trigger `Odui_Dlg_00` `t1.OriginPlacement` 2 `0` `constr`;\
+                                 ~ Trigger `Odui_Dlg_00` `t1.OriginPlacement` 2 `` ``;\
+                                 ~ FocusOut `Odui_Dlg_00` `t1.OriginPlacement`;\
+                                 ~ Select `Odui_Dlg_00` `pg_vis_tab` 1 `tab_3`;\
+                                 ~ FocusOut `Odui_Dlg_00` `t3.datum_csys_name`;\
+                                 ~ Activate `Odui_Dlg_00` `Odui_Dlg_00`;\
+                                 ~ Input `Odui_Dlg_00` `t3.datum_csys_name` ``;\
+                                 ~ Update `Odui_Dlg_00` `t3.datum_csys_name` ``;\
+                                 ~ FocusOut `Odui_Dlg_00` `t3.datum_csys_name`;\
+                                 ~ Activate `Odui_Dlg_00` `Odui_Dlg_00`;\
+                                 ~ Input `Odui_Dlg_00` `t3.datum_csys_name` `K_SAGROUP`;\
+                                 ~ Update `Odui_Dlg_00` `t3.datum_csys_name` `K_SAGROUP`;\
+                                 ~ Activate `Odui_Dlg_00` `t3.datum_csys_name`;\
+                                 ~ FocusOut `Odui_Dlg_00` `t3.datum_csys_name`;\
+                                 ~ Activate `Odui_Dlg_00` `stdbtn_1`;"
+            create_csy_script = create_csy_script.replace('K_M2', constraint_to)
+            create_csy_script = create_csy_script.replace('K_SAGROUP', name_of_csy)
+            creopyson.interface_mapkey(self.creo_client, create_csy_script)
+
+            continue_after_mapkey = False
+            while not continue_after_mapkey:
+                time.sleep(0.2)
+                if any(x['name'] == name_of_csy for x in creopyson.feature_list(self.creo_client, type_='COORDINATE SYSTEM')):
+                    continue_after_mapkey = True
+
+    def create_sa_groups(self):
+        """Creating of empty special assemblies. From CAD view - group is assembled to master model and renamed"""
+        self.open_picked_master_model()
+        sa_list = []
+        # filtering out only SAP group name
+        for each_dict in self.paired_bill_of_material:
+            if 'SA' in each_dict['SAP_group_name']:
+                sa_list.append(each_dict['SAP_group_name'].replace('.', ''))
+        # Removing of duplicates.
+        sa_list = [i for n, i in enumerate(sa_list) if i not in sa_list[n + 1:]]
+        current_master_model = self.current_master_model()
+        order_number = self.current_order_number()
+        skeleton_information = self.check_whether_skeleton_exists(current_master_model)
+        machine_type = current_master_model[0:2].replace('_', '')
+
+        creopyson.file_open(self.creo_client, file_=skeleton_information['skel_name'])
+        for each_sap_group in sa_list:
+            new_csy_name = 'K_' + each_sap_group
+            self.create_coordinate_system(constraint_to=skeleton_information['csy'], name_of_csy=new_csy_name)
+        creopyson.file_open(self.creo_client, file_=current_master_model)
+
+        for each_sap_group in sa_list:
+            cad_group = machine_type + '_' + each_sap_group + '_' + order_number + '.asm'
+            new_csy_name = 'K_' + each_sap_group
+            if self.check_whether_model_exists(self, erp_material_number=cad_group) == '':
+                # TODO: elif existuje a not in bill of material -iba prizostav - else statement vsetko je ok !
+                creopyson.file_open(self.creo_client, file_='MACHINETYPE_SAGROUP_ORDERNUMBER.ASM')
+                self.allow_conflicts()
+                creopyson.file_rename(self.creo_client, file_="MACHINETYPE_SAGROUP_ORDERNUMBER.ASM", new_name=cad_group, onlysession=True)
+                creopyson.feature_rename(self.creo_client, new_name=new_csy_name, name="K_SAGROUP", file_=cad_group)
+                creopyson.file_assemble(self.creo_client, file_=cad_group, into_asm=current_master_model, ref_model=skeleton_information['skel_name'],
+                                        constraints=[{"asmref": new_csy_name, "compref": new_csy_name, "type": "csys"}])
+            elif self.check_whether_model_exists(self, erp_material_number=cad_group) != '' and all(bill_group['name'] != cad_group.lower() for bill_group in self.bill_of_material):
+                creopyson.file_open(self.creo_client, file_=cad_group)
+                default_csy = creopyson.feature_list(self.creo_client, type_='COORDINATE SYSTEM')[0]['name']
+                creopyson.file_assemble(self.creo_client, file_=cad_group, into_asm=current_master_model, ref_model=skeleton_information['skel_name'],
+                                        constraints=[{"asmref": new_csy_name, "compref": default_csy, "type": "csys"}])
+            else:
+                pass
+
+        creopyson.file_open(self.creo_client, file_=current_master_model)
+        self.add_models_in_opened_group_to_bom(level_of_master_model_tree=1)
+
+    def assemble_models_to_master_model(self):
+
+        current_master_model = self.current_master_model()
+        creopyson.file_open(self.creo_client, file_='assembling_loading_bar.prt')
+        self.allow_conflicts()
+        previous_state = ''
+
+        for every_erp_sap_name_cad_group in self.paired_bill_of_material:
+            erp_material_number = every_erp_sap_name_cad_group['ERP_number']
+            cad_parent_model = every_erp_sap_name_cad_group['CAD_group_name']
+            if cad_parent_model != 'Not defined':
+                self.assemble_model(erp_material_number, cad_parent_model)
+                current_state = (math.ceil(self.paired_bill_of_material.index(every_erp_sap_name_cad_group)/len(self.bill_of_material)))*100
+                print(f"Current state is {current_state}.")
+                if current_state != previous_state:
+                    creopyson.dimension_set(self.creo_client, name='Load_bar_extrude', value=current_state)
+                    creopyson.file_regenerate(self.creo_client)
+                    previous_state = current_state
+
+        creopyson.file_open(self.creo_client, file_=current_master_model)
+
+    def check_non_assembled_models(self):
+
+        """ This function is purposed to provide feedback to user about assembling process.
+            It collects all non - assembled models and check their existence.
+            If model exists, function creates pdf and saves this pdf to PartToConsider folder.
+            This method of controlling non-assembled parts eases work of creators."""
+
+        current_master_model = self.current_master_model()
+        self.clear_bill_of_material()
+        self.create_master_model_bill_of_material_with_suppressed(levels=3)
+        self.paired_bill_of_material = self.zs_63.pair_converted_zs_63_with_cad_master_model(self.bill_of_material)
+
+        for each in self.paired_bill_of_material:
+            if all(each['ERP_number'] not in x['name'] for x in self.bill_of_material):
+                model_name = self.check_whether_model_exists(erp_material_number=each['ERP_number'])
+                if model_name:
+
+                    jpeg_name_raw = model_name.replace('.', '_') + "_" + each['SAP_group_name'].replace('.', '_')
+                    jpeg_name = ""
+                    for each_char in jpeg_name_raw:
+                        if each_char.isalnum() or each_char == "_":
+                            jpeg_name += each_char
+                    creopyson.file_open(self.creo_client, file_=model_name)
+                    image_location_dict = creopyson.interface_export_image(self.creo_client, file_type="JPEG", filename=jpeg_name)
+                    image_location = image_location_dict["dirname"] + image_location_dict["filename"]
+                    final_image_path = os.path.dirname(sys.argv[0]) + '/FeedbackFolder/' + image_location_dict["filename"]
+                    print(image_location)
+
+                    try:
+                        shutil.move(image_location, final_image_path)
+                    except:
+                        logger.warning("There was some problem to store screenshot of model " + final_image_path)
+                        logger.exception("message")
+
+        creopyson.file_open(self.creo_client, file_=current_master_model)
 
 
 class Zs63:
     """This class refers to text file from zs63 SAP transaction. Loading of this function has to be enhanced with SAP scripting."""
-    def __init__(self, current_master_model):
+    def __init__(self):
         self.final_folder_path = os.path.dirname(sys.argv[0]) + '\\ErpBom\\ZS_63.txt'
         self.all_lists = []
         self.m_groups_list = []
         self.ze_groups_list = []
         self.sa_groups_list = []
-        self.current_master_model = current_master_model
         # Methods on innit
         self.get_zs63_file()
         self.transform_zs_63()
@@ -1076,6 +1263,7 @@ class Zs63:
         ze_groups_list = []
         sa_groups_list = []
         zs_63 = []
+        special_allowed_signs = ['.', '#']
 
         with open(self.final_folder_path) as zs_data:
 
@@ -1091,36 +1279,17 @@ class Zs63:
             # Newly create section where some risky signs will be removed from zs_63.txt
             if type(zs_63) == list:
                 for each_element in zs_63:
-                    try:
-                        if "°C" in each_element:
-                            zs_63.remove(each_element)
-                            print(each_element + " is removed as banned symbol.")
-                    except:
-                        logger.info("banned symbol was not possible to remove ")
-
-                for each_element in zs_63:
-                    try:
-                        if "?" in each_element:
-                            zs_63[zs_63.index(each_element)] = each_element.replace("?", " ")
-                            print(each_element + " is removed as banned symbol ?")
-                    except:
-                        pass
-                for each_element in zs_63:
-                    try:
-                        if "#" in each_element and each_element[2] != "#":
-                            zs_63[zs_63.index(each_element)] = each_element.replace("#", " ")
-                            print(each_element + " is removed as banned symbol #")
-                    except:
-                        pass
+                    if not each_element.isalnum() and each_element not in special_allowed_signs or "#" in each_element and each_element[2] != "#":
+                        zs_63.remove(each_element)
 
             # Here we try to set injection unit size for MX
             try:
-                global zs_63_injection_unit;
+                global zs_63_injection_unit
                 zs_63_injection_unit = ""
                 if "mx" in self.current_master_model:
                     following_line = False
                     for line in zs_63:
-                        if following_line == True:
+                        if following_line:
                             list_of_splited_line = line.split("/")
                             zs_63_injection_unit_raw = list_of_splited_line[1]
                             zs_63_injection_unit = zs_63_injection_unit_raw
@@ -1152,7 +1321,7 @@ class Zs63:
                 pair_group_and_number = []
                 for each_split_element in split_element:
                     each_split_element = each_split_element.strip()
-                    if len(each_split_element) > 6 and len(each_split_element) < 9 and '7' not in each_split_element[0:1] and each_split_element.isnumeric():
+                    if 6 < len(each_split_element) < 9 and '7' not in each_split_element[0:1] and each_split_element.isnumeric():
                         pair_group_and_number.append(each_split_element)
                     if 'M' in each_split_element and '.' in each_split_element or 'C' in each_split_element and '.' in each_split_element:
                         pair_group_and_number.append(each_split_element)
@@ -1167,7 +1336,7 @@ class Zs63:
                 pair_group_and_number = []
                 for each_split_element in split_element:
                     each_split_element = each_split_element.strip()
-                    if len(each_split_element) > 6 and len(each_split_element) < 9 and '7' not in each_split_element[0:1] and each_split_element.isnumeric():
+                    if 6 < len(each_split_element) < 9 and '7' not in each_split_element[0:1] and each_split_element.isnumeric():
                         pair_group_and_number.append(each_split_element)
                     if '.' in each_split_element:
                         try:
@@ -1187,15 +1356,15 @@ class Zs63:
                 pair_group_and_number = []
                 for each_split_element in split_element:
                     each_split_element = each_split_element.strip()
-                    if len(each_split_element) < 4 and len(each_split_element) > 1 and each_split_element.isnumeric():
-                        SAValue = int(each_split_element)
-                        if SAValue > 29 and SAValue < 300:
+                    if 4 > len(each_split_element) > 1 and each_split_element.isnumeric():
+                        sa_value = int(each_split_element)
+                        if 29 < sa_value < 300:
                             if len(each_split_element) == 2:
                                 each_split_element = 'SA0' + each_split_element
                             if len(each_split_element) == 3:
                                 each_split_element = 'SA' + each_split_element
                             pair_group_and_number.append(each_split_element)
-                    if len(each_split_element) > 6 and len(each_split_element) < 9 and '7' not in each_split_element[0:1] and each_split_element.isnumeric():
+                    if 6 < len(each_split_element) < 9 and '7' not in each_split_element[0:1] and each_split_element.isnumeric():
                         pair_group_and_number.append(each_split_element)
                 if len(pair_group_and_number) == 2:
                     mat_nr = pair_group_and_number[1]
@@ -1205,18 +1374,21 @@ class Zs63:
 
     def pair_converted_zs_63_with_cad_master_model(self, bill_of_material):
 
-        if special_sign != None:
-            m6_list = []
-            previous_dict = {}
-            # count how many times M6_M01 occures in all lists
-            for every_dict in self.all_lists:
-                if 'M6' in every_dict['SAP_group_name']:
-                    if not any(x == every_dict['SAP_group_name'] for x in m6_list):
-                        m6_list.append(every_dict['SAP_group_name'])
-                    else:
-                        if every_dict['SAP_group_name'] != previous_dict:
-                            every_dict['SAP_group_name'] = special_sign + every_dict['SAP_group_name']
-                            previous_dict = every_dict['SAP_group_name']
+        try:
+            if special_sign != None:
+                m6_list = []
+                previous_dict = {}
+                # count how many times M6_M01 occures in all lists
+                for every_dict in self.all_lists:
+                    if 'M6' in every_dict['SAP_group_name']:
+                        if not any(x == every_dict['SAP_group_name'] for x in m6_list):
+                            m6_list.append(every_dict['SAP_group_name'])
+                        else:
+                            if every_dict['SAP_group_name'] != previous_dict:
+                                every_dict['SAP_group_name'] = special_sign + every_dict['SAP_group_name']
+                                previous_dict = every_dict['SAP_group_name']
+        except NameError:
+            pass
 
         for every_dict in self.all_lists:
 
@@ -1286,39 +1458,91 @@ class Zs63:
         # Short computation to determine quality of pairing process. Output is logged.
         successful_pairing = 0
         for each_dict in self.all_lists:
-            print(each_dict)
             if each_dict["CAD_group_name"] != "Not defined":
                 successful_pairing = successful_pairing + 1
+        if len(self.all_lists)>1:
+            percentage = successful_pairing / len(self.all_lists) * 100
+            logger.info(f"Percentage of defined pairs is {str(percentage)} %.")
+            print(f"Percentage of defined pairs is {str(percentage)} %.")
+            logger.info('end of pairing')
+            self.all_lists = [i for n, i in enumerate(self.all_lists) if i not in self.all_lists[n + 1:]]
 
-        percentage = successful_pairing / len(self.all_lists) * 100
-        logger.info(f"Percentage of defined pairs is {str(percentage)} %.")
-        print(f"Percentage of defined pairs is {str(percentage)} %.")
-        logger.info('end of pairing')
+        for each in self.all_lists:
+            print(each)
 
         return self.all_lists
 
 
-def development_function():
+def assembling_process():
 
-    """"Function created for binding of testing functions. Initiated from ZS63 button."""
-    start_time = time.time()
-    session = CreoAPI()
+        """This procedure covers whole process of assembling. All the steps of this essential function are described below in comments.
+        Based on input order number, process of assembling is divided to 2 parts"""
 
-    creopyson.file_open(session.creo_client, file_=app.list_cad_models.what_is_picked_option())
-    session.create_master_model_bill_of_material_with_suppressed(levels=1)
-    session.filter_assemblies()
-    #session.set_model_convention_on_the_fly()
-    #session.change_order_number()
+        start_time = time.time()
+        app_status_button = CreateControlButton(parent=app, row_grid=11, column_grid=2, icon_name='in_progress_status.png')
 
-    session.clear_bill_of_material()
-    session.create_master_model_bill_of_material_with_suppressed(levels=3)
+        try:
 
-    session.zs_63_pairing()
-    session.remove_unnecessary_material_numbers()
+            if len(order_number_entry.get()) == 6:
 
-    message = "Creation of BOM took program " + ("--- %s seconds ---" % (time.time() - start_time))
-    logger.info(message)
-    print(message)
+                session = CreoAPI()
+                session.create_master_model_bill_of_material_with_suppressed(levels=1)
+                session.filter_assemblies()
+                session.create_master_model_bill_of_material_with_suppressed(levels=3)
+                session.zs_63_pairing()
+                session.remove_unnecessary_material_numbers()
+                session.create_sa_groups()
+                session.set_model_convention_on_the_fly()
+                session.change_order_number()
+                session.create_master_model_bill_of_material_with_suppressed(levels=3)
+                session.zs_63_pairing()
+                # TODO: Try test with closed master model
+                session.set_default_view()
+                session.assemble_models_to_master_model()
+            else:
+
+                yes_no_preparation = tkinter.messagebox.askquestion('Invalid Order Number', 'Order number is not valid. Do you want to continue without preparation of master model?'
+                                                                                            'Currently opened master model will be reference for process of automation. '
+                                                                                            'This process will delete invalid material numbers and assemble components from loaded ZS63 text file.',
+                                                                                            icon='warning')
+                if not yes_no_preparation:
+                    exit()
+
+                session = CreoAPI(open_master=False)
+                #  function loads ZS_63 - this function is must in all cases
+                session.create_master_model_bill_of_material_with_suppressed(levels=3)
+                session.zs_63_pairing()
+                session.remove_unnecessary_material_numbers()
+                session.create_sa_groups()
+                session.set_model_convention_on_the_fly()
+                session.create_master_model_bill_of_material_with_suppressed(levels=3)
+                session.zs_63_pairing()
+                session.set_default_view()
+                session.assemble_models_to_master_model()
+
+            session.check_non_assembled_models()
+            creopyson.file_open(session.creo_client, file_=session.current_master_model())
+            creopyson.file_save(session.creo_client, file_=session.current_master_model())
+            session.rename_config_control(boolean=False)
+            tkinter.messagebox.showinfo('Automation status', 'Automation completed !')
+
+            app_status_button.destroy_this_button()
+            app_status_button = CreateControlButton(parent=app, row_grid=11, column_grid=2, icon_name='green_check_mark_status.png', command=open_log_file)
+        except:
+            app_status_button.destroy_this_button()
+            CreateControlButton(parent=app, row_grid=11, column_grid=2, icon_name='error_status.png', command=open_log_file)
+            print("there should be icon")
+            sys.exc_info()
+            logger.exception("message")
+            print(sys.exc_info())
+            try:
+                session.rename_config_control(boolean=False)
+            except:
+                pass
+
+        message = "Creation of master model took program " + ("--- %s seconds ---" % (time.time() - start_time))
+        logger.info(message)
+        print(message)
 
 
 def only_numerics(seq):
@@ -1330,9 +1554,9 @@ def remove_files_from_folder(folder_name):
 
     set_global_paths()
 
-    for f in os.walk(folder_name):
-        for fileX in f:
-            print(fileX)
+    for file_or_folder in os.walk(folder_name):
+        for fileX in file_or_folder:
+            pass
         for each in fileX:
             os.remove(folder_name + '\\' + each)
             logger.info("removing file " + each)
@@ -1353,6 +1577,20 @@ def set_global_paths():
         global delete_exclude_path
         delete_exclude_path = 'DeleteExclude\\'
 
+
+def open_log_file():
+    """Button reaction function"""
+    log_file = 'assembly_automation.log'
+    os.startfile(log_file)
+
+
+def compare_with_zs63_file_button():
+
+    """Button reaction function."""
+    remove_files_from_folder(feedback_folder_path)
+    session = CreoAPI(open_master=False)
+    session.check_non_assembled_models()
+    tkinter.messagebox.showinfo('Comparing is completed', 'View missing material numbers in Feedback folder !')
 
 
 def main():
