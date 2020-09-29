@@ -7,6 +7,7 @@ import logging
 import time
 import shutil
 import csv
+import threading
 from difflib import SequenceMatcher
 from PIL import ImageTk, Image
 from tkinter import messagebox
@@ -14,6 +15,7 @@ from tkinter import filedialog
 
 # TODO: comment everything !!!
 # TODO: Replace os module with shutil/subproccess !!!
+# TODO: Critical buttons could be refactored.
 
 # ---Logging---
 try:
@@ -53,9 +55,11 @@ class Application(tkinter.Frame):
 
     def create_buttons(self):
 
-        self.run_button = CreateControlButton(parent=self, row_grid=13, column_grid=0, command=automation_process, icon_name="run_automation.png")
-        self.run_button.disable_this_button()
-        self.compare_zs_63_button = CreateControlButton(parent=self, row_grid=13, column_grid=1, command=compare_with_zs63_file_button, icon_name="compare_zs_63.png")
+        global run_button
+        run_button = CreateControlButton(parent=self, row_grid=13, column_grid=0, command=automation_process, icon_name="run_automation.png")
+        run_button.disable_this_button()
+        global compare_zs_63_button
+        compare_zs_63_button = CreateControlButton(parent=self, row_grid=13, column_grid=1, command=compare_with_zs63_file_button, icon_name="compare_zs_63.png")
         self.reset_button = CreateControlButton(parent=self, row_grid=13, column_grid=2, command=self.reset_graphical_user_interface, icon_name="reset.png")
         self.feedback_button = CreateControlButton(parent=self, row_grid=14, column_grid=0, command=self.open_feedback_folder, icon_name="feedback_folder.png")
         self.source_folder_button = CreateControlButton(parent=self, row_grid=14, column_grid=1, command=self.open_database_folder, icon_name="source_folder.png")
@@ -84,7 +88,7 @@ class Application(tkinter.Frame):
     def create_cad_models_list(self):
         """This method lists all mastermodels (CAD names), according to machine type picked by user."""
         # Initial GUI operations
-        self.run_button.enable_this_button()
+        run_button.enable_this_button()
         self.machine_type_drop_down_menu.disable_this_dropdown_menu()
         self.confirm_selected_machinetype.disable_this_button()
         self.selected_machine_type = self.machine_type_drop_down_menu.what_is_picked_option()
@@ -208,12 +212,21 @@ class Application(tkinter.Frame):
     # BUTTON FUNCTIONS
     def reset_graphical_user_interface(self):
         """Button reaction function"""
-        self.close_graphical_user_interface()
-        main()
+        try:
+            if main_thread.is_alive:
+                tkinter.messagebox.showinfo(title='Automation in process', message='While the automation is running, it is not possible to restart app. Use quit button to terminate the application.')
+            else:
+                self.master.destroy()
+                main()
+        except:
+            self.master.destroy()
+            main()
 
     def close_graphical_user_interface(self):
         """Button reaction function"""
-        self.master.destroy()
+        yes_no_quit = tkinter.messagebox.askquestion('Termination of application', 'KM automation assembly application will be terminated.', icon='warning')
+        if yes_no_quit:
+            exit()
 
     def open_database_folder(self):
         """Button reaction function"""
@@ -234,25 +247,30 @@ class CreateControlButton:
 
     def __init__(self, parent, row_grid, column_grid, command, icon_name):
         self.parent = parent
-        self.icon_obj = ImageTk.PhotoImage(Image.open(icons_folder_path + icon_name))
-        self.parent.button_obj = tkinter.Button(image=self.icon_obj, command=command)
-        self.parent.button_obj.grid(row=row_grid, column=column_grid)
+        self.command = command
+        self.icon_name = icon_name
+        self.row_grid = row_grid
+        self.column_grid = column_grid
+        self.icon_obj = ImageTk.PhotoImage(Image.open(icons_folder_path + self.icon_name))
+        self.parent.button_obj = tkinter.Button(image=self.icon_obj, command=self.command)
+        self.parent.button_obj.grid(row=self.row_grid, column=self.column_grid)
+        self.image_name = self.parent.button_obj.image_names()
 
     def set_rowspan_equals_2(self):
         self.parent.button_obj.grid(rowspan=2)
 
     def disable_this_button(self):
-        self.parent.button_obj.config(state='disabled')
+        self.parent.button_obj['state'] = 'disable'
 
     def enable_this_button(self):
-        self.parent.button_obj.config(state='normal')
+        self.parent.button_obj['state'] = 'normal'
 
     def destroy_this_button(self):
         self.parent.button_obj.destroy()
 
 
 class CreateDropDownMenu:
-    """This class represent list box shown in graphical user interface."""
+    """This class represents list box shown in graphical user interface."""
     def __init__(self, parent, list_properties, row_grid, column_grid):
         self.parent = parent
         self.preselected_option = tkinter.StringVar(parent.master)
@@ -1121,29 +1139,32 @@ class CreoAPI:
             cad_group = machine_type + '_' + each_sap_group + '_' + order_number + '.asm'
             coordinate_system_name = f'K_{each_sap_group}'.strip().upper()
             print(f'CAD group is {cad_group}.')
-            if self.check_whether_model_exists(erp_material_number=cad_group) == '':
-                # Model does not exist. Therefore nwe model has to be created.
-                creopyson.file_open(self.creo_client, file_='MACHINETYPE_SAGROUP_ORDERNUMBER.ASM')
-                creopyson.file_rename(self.creo_client, file_="MACHINETYPE_SAGROUP_ORDERNUMBER.ASM", new_name=cad_group, onlysession=True)
-                creopyson.feature_rename(self.creo_client, new_name=coordinate_system_name, name="K_SAGROUP", file_=cad_group)
-                # Newly created model is saved.
-                creopyson.file_save(self.creo_client)
-                default_csy = creopyson.feature_list(self.creo_client, type_='COORDINATE SYSTEM')[0]['name']
-                creopyson.file_open(self.creo_client, file_=current_master_model)
-                creopyson.file_assemble(self.creo_client, file_=cad_group, into_asm=current_master_model, ref_model=skeleton_information['skel_name'],
-                                        constraints=[{"asmref": coordinate_system_name, "compref": default_csy, "type": "csys"}])
-                self.add_models_in_opened_group_to_bom()
-                self.check_whether_is_destination_group()
-            elif self.check_whether_model_exists(erp_material_number=cad_group) != '' and all(bill_group['name'].lower() != cad_group.lower() for bill_group in self.bill_of_material):
-                creopyson.file_open(self.creo_client, file_=cad_group)
-                default_csy = creopyson.feature_list(self.creo_client, type_='COORDINATE SYSTEM')[0]['name']
-                creopyson.file_open(self.creo_client, file_=current_master_model)
-                creopyson.file_assemble(self.creo_client, file_=cad_group, into_asm=current_master_model, ref_model=skeleton_information['skel_name'],
-                                         constraints=[{"asmref": coordinate_system_name, "compref": default_csy, "type": "csys"}])
-                self.add_models_in_opened_group_to_bom()
-                self.check_whether_is_destination_group()
-            else:
-                pass
+            try:
+                if self.check_whether_model_exists(erp_material_number=cad_group) == '':
+                    # Model does not exist. Therefore nwe model has to be created.
+                    creopyson.file_open(self.creo_client, file_='MACHINETYPE_SAGROUP_ORDERNUMBER.ASM')
+                    creopyson.file_rename(self.creo_client, file_="MACHINETYPE_SAGROUP_ORDERNUMBER.ASM", new_name=cad_group, onlysession=True)
+                    creopyson.feature_rename(self.creo_client, new_name=coordinate_system_name, name="K_SAGROUP", file_=cad_group)
+                    # Newly created model is saved.
+                    creopyson.file_save(self.creo_client)
+                    default_csy = creopyson.feature_list(self.creo_client, type_='COORDINATE SYSTEM')[0]['name']
+                    creopyson.file_open(self.creo_client, file_=current_master_model)
+                    creopyson.file_assemble(self.creo_client, file_=cad_group, into_asm=current_master_model, ref_model=skeleton_information['skel_name'],
+                                            constraints=[{"asmref": coordinate_system_name, "compref": default_csy, "type": "csys"}])
+                    self.add_models_in_opened_group_to_bom()
+                    self.check_whether_is_destination_group()
+                elif self.check_whether_model_exists(erp_material_number=cad_group) != '' and all(bill_group['name'].lower() != cad_group.lower() for bill_group in self.bill_of_material):
+                    creopyson.file_open(self.creo_client, file_=cad_group)
+                    default_csy = creopyson.feature_list(self.creo_client, type_='COORDINATE SYSTEM')[0]['name']
+                    creopyson.file_open(self.creo_client, file_=current_master_model)
+                    creopyson.file_assemble(self.creo_client, file_=cad_group, into_asm=current_master_model, ref_model=skeleton_information['skel_name'],
+                                             constraints=[{"asmref": coordinate_system_name, "compref": default_csy, "type": "csys"}])
+                    self.add_models_in_opened_group_to_bom()
+                    self.check_whether_is_destination_group()
+                else:
+                    pass
+            except:
+                creopyson.file_assemble(self.creo_client, into_asm=current_master_model, file_=cad_group, constraints=[{"type": "fix"}], package_assembly=True)
 
         creopyson.file_open(self.creo_client, file_=current_master_model)
         self.add_models_in_opened_group_to_bom(level_of_master_model_tree=1)
@@ -1438,6 +1459,14 @@ class Zs63notPickedError(Exception):
         super().__init__(self.message)
 
 
+class CancelByUserError(Exception):
+    """Error class object. This special error has been designed to do not interrupt application if the user does not select zs_63.txt file."""
+    def __init__(self, zs63_file, message="User has canceled his operation."):
+        self.zs63_file = zs63_file
+        self.message = message
+        super().__init__(self.message)
+
+
 class Zs63:
     """This class refers to text file from zs63 SAP transaction. Loading of this function has to be enhanced with SAP scripting."""
     def __init__(self):
@@ -1454,11 +1483,8 @@ class Zs63:
         """This method loads zs63 file to application"""
         remove_files_from_folder(erp_folder_path)
         remove_files_from_folder(feedback_folder_path)
-        sap_source = tkinter.Tk()
-        sap_source.filename = filedialog.askopenfilename(initialdir='\\', title='Choose ZS63 file', filetypes=(('text files', '*.txt'), ('all files', '*.*')))
-        sap_source.destroy()
-
-        current_folder_path = sap_source.filename
+        root.filename = filedialog.askopenfilename(initialdir='\\', title='Choose ZS63 file', filetypes=(('text files', '*.txt'), ('all files', '*.*')))
+        current_folder_path = root.filename
 
         try:
             shutil.copyfile(current_folder_path, self.final_folder_path)
@@ -1711,72 +1737,93 @@ def automation_process():
     """ This procedure covers whole process of assembling.
         All the steps of this essential function are described below in comments.
         Based on input order number, process of assembling is divided to 2 parts."""
-    start = time.time()
-    app_status_button = CreateControlButton(parent=app, row_grid=11, column_grid=2, icon_name='in_progress_status.png', command=None)
 
-    try:
-        if len(order_number_entry.get()) == 6:
-            session = CreoAPI()
-            session.create_master_model_bill_of_material_with_suppressed(levels=1)
-            session.filter_assemblies()
-            session.create_master_model_bill_of_material_with_suppressed(levels=3)
-            session.zs_63_pairing()
-            session.remove_unnecessary_material_numbers()
-            session.create_sa_groups()
-            session.set_model_convention_on_the_fly()
-            session.change_order_number()
-            session.create_master_model_bill_of_material_with_suppressed(levels=3)
-            session.zs_63_pairing()
-            # TODO: Try test with closed master model
-            session.set_default_view()
-            session.assemble_models_to_master_model()
-        else:
-            yes_no_preparation = tkinter.messagebox.askquestion(
-                'Invalid Order Number', 'Order number is not valid. Do you want to continue without preparation of master model?'
-                                        ' Currently opened master model will be reference for process of automation. '
-                                        'This process will delete invalid material numbers and assemble components from loaded ZS63 text file.',
-                icon='warning')
-            if not yes_no_preparation:
-                exit()
+    def main_API_thread():
 
-            session = CreoAPI(open_master=False)
-            #  function loads ZS_63 - this function is must in all cases
-            session.create_master_model_bill_of_material_with_suppressed(levels=3)
-            session.zs_63_pairing()
-            session.remove_unnecessary_material_numbers()
-            session.create_sa_groups()
-            session.set_model_convention_on_the_fly()
-            session.create_master_model_bill_of_material_with_suppressed(levels=3)
-            session.zs_63_pairing()
-            session.set_default_view()
-            session.assemble_models_to_master_model()
+        # With introduction of threading is necessary to disable critical buttons => run, compare ZS63
+        # Button Operations
+        run_button = CreateControlButton(parent=app, row_grid=13, column_grid=0, command=automation_process, icon_name="run_automation.png")
+        run_button.disable_this_button()
+        compare_zs_63_button = CreateControlButton(parent=app, row_grid=13, column_grid=1, command=compare_with_zs63_file_button, icon_name="compare_zs_63.png")
+        compare_zs_63_button.disable_this_button()
+        app_status_button = CreateControlButton(parent=app, row_grid=11, column_grid=2, icon_name='in_progress_status.png', command=None)
+        app.update()
 
-        session.check_non_assembled_models()
-        session.configs_manipulation(api_mode=False)
-        session.session_mapkeys(regenerate=True, mc=True, save=True)
-        tkinter.messagebox.showinfo('Automation status', 'Automation completed ! Wait for the finish of ModelCheck.')
-        print('Successful finish of the automation.')
-        app_status_button.destroy_this_button()
-    except Zs63notPickedError:
-        pass
-    except:
-        app_status_button.destroy_this_button()
-        sys.exc_info()
-        logger.exception("message")
-        print("message")
-        tkinter.messagebox.showerror(title='Critical error', message=sys.exc_info())
+        start = time.time()
+
         try:
-            session.configs_manipulation(api_mode=False)
-        except:
-            pass
-        open_log_file()
+            if len(order_number_entry.get()) == 6:
+                session = CreoAPI()
+                session.create_master_model_bill_of_material_with_suppressed(levels=1)
+                session.filter_assemblies()
+                session.create_master_model_bill_of_material_with_suppressed(levels=3)
+                session.zs_63_pairing()
+                session.remove_unnecessary_material_numbers()
+                session.create_sa_groups()
+                session.set_model_convention_on_the_fly()
+                session.change_order_number()
+                session.create_master_model_bill_of_material_with_suppressed(levels=3)
+                session.zs_63_pairing()
+                session.set_default_view()
+                session.assemble_models_to_master_model()
+            else:
+                yes_no_preparation = tkinter.messagebox.askquestion(
+                    'Invalid Order Number', 'Order number is not valid. Do you want to continue without preparation of master model?'
+                                            ' Currently opened master model will be reference for process of automation. '
+                                            'This process will delete invalid material numbers and assemble components from loaded ZS63 text file.',
+                    icon='warning')
 
-    end = time.time()
-    hours, rem = divmod(end - start, 3600)
-    minutes, seconds = divmod(rem, 60)
-    elapsed_time = ("{:0>2}:{:0>2}:{:05.2f}".format(int(hours), int(minutes), seconds))
-    logger.info(elapsed_time)
-    print(f'Elapsed time of automation process is {elapsed_time}.')
+                if yes_no_preparation == 'no':
+                    logger.exception("Selection process has been stopped by user.")
+                    raise CancelByUserError('Yes no preparation')
+
+                session = CreoAPI(open_master=False)
+                #  function loads ZS_63 - this function is must in all cases
+                session.create_master_model_bill_of_material_with_suppressed(levels=3)
+                session.zs_63_pairing()
+                session.remove_unnecessary_material_numbers()
+                session.create_sa_groups()
+                session.set_model_convention_on_the_fly()
+                session.create_master_model_bill_of_material_with_suppressed(levels=3)
+                session.zs_63_pairing()
+                session.set_default_view()
+                session.assemble_models_to_master_model()
+
+            session.check_non_assembled_models()
+            session.configs_manipulation(api_mode=False)
+            session.session_mapkeys(regenerate=True, mc=True, save=True)
+            tkinter.messagebox.showinfo('Automation status', 'Automation completed ! Wait for the finish of ModelCheck.')
+            print('Successful finish of the automation.')
+            # Button operations
+            app_status_button.destroy_this_button()
+            run_button.enable_this_button()
+            compare_zs_63_button.enable_this_button()
+        except Zs63notPickedError:
+            pass
+        except CancelByUserError:
+            pass
+        except:
+            app_status_button.destroy_this_button()
+            sys.exc_info()
+            logger.exception("message")
+            print("message")
+            tkinter.messagebox.showerror(title='Critical error', message=sys.exc_info())
+            try:
+                session.configs_manipulation(api_mode=False)
+            except:
+                pass
+            open_log_file()
+
+        end = time.time()
+        hours, rem = divmod(end - start, 3600)
+        minutes, seconds = divmod(rem, 60)
+        elapsed_time = ("{:0>2}:{:0>2}:{:05.2f}".format(int(hours), int(minutes), seconds))
+        logger.info(elapsed_time)
+        print(f'Elapsed time of automation process is {elapsed_time}.')
+
+    global main_thread
+    main_thread = threading.Thread(target=main_API_thread, daemon=True)
+    main_thread.start()
 
 
 def only_numerics(sequence):
@@ -1840,21 +1887,38 @@ def open_log_file():
 
 def compare_with_zs63_file_button():
     """Button reaction function."""
-    remove_files_from_folder(feedback_folder_path)
-    session = CreoAPI(open_master=False)
-    session.check_non_assembled_models()
-    tkinter.messagebox.showinfo('Comparing is completed', 'View missing material numbers in Feedback folder !')
+
+    def compare_thread():
+
+        run_button = CreateControlButton(parent=app, row_grid=13, column_grid=0, command=automation_process, icon_name="run_automation.png")
+        run_button.disable_this_button()
+        compare_zs_63_button = CreateControlButton(parent=app, row_grid=13, column_grid=1, command=compare_with_zs63_file_button, icon_name="compare_zs_63.png")
+        compare_zs_63_button.disable_this_button()
+        app_status_button = CreateControlButton(parent=app, row_grid=11, column_grid=2, icon_name='in_progress_status.png', command=None)
+
+        remove_files_from_folder(feedback_folder_path)
+        session = CreoAPI(open_master=False)
+        session.check_non_assembled_models()
+        tkinter.messagebox.showinfo('Comparing is completed', 'View missing material numbers in Feedback folder !')
+
+        app_status_button.destroy_this_button()
+        run_button.enable_this_button()
+        compare_zs_63_button.enable_this_button()
+
+    main_thread = threading.Thread(target=compare_thread, daemon=True)
+    main_thread.start()
 
 
 def main():
     """ Main function  - Graphical user interface is initialized by this function.
     Necessary to wrap into function because of its usage in Reset button command."""
     global app
+    global root
+
     root = tkinter.Tk()
     root.lift()
     app = Application(master=root)
     app.mainloop()
-
 
 if __name__ == "__main__":
     main()
