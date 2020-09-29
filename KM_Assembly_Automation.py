@@ -1796,14 +1796,16 @@ def automation_process():
             print('Successful finish of the automation.')
             # Button operations
             app_status_button.destroy_this_button()
-            run_button.enable_this_button()
-            compare_zs_63_button.enable_this_button()
+            run_button.destroy_this_button()
+            compare_zs_63_button.destroy_this_button()
         except Zs63notPickedError:
             pass
         except CancelByUserError:
             pass
         except:
             app_status_button.destroy_this_button()
+            run_button.destroy_this_button()
+            compare_zs_63_button.destroy_this_button()
             sys.exc_info()
             logger.exception("message")
             print("message")
@@ -1902,9 +1904,10 @@ def compare_with_zs63_file_button():
         tkinter.messagebox.showinfo('Comparing is completed', 'View missing material numbers in Feedback folder !')
 
         app_status_button.destroy_this_button()
-        run_button.enable_this_button()
-        compare_zs_63_button.enable_this_button()
+        run_button.destroy_this_button()
+        compare_zs_63_button.destroy_this_button()
 
+    global main_thread
     main_thread = threading.Thread(target=compare_thread, daemon=True)
     main_thread.start()
 
@@ -1919,6 +1922,7 @@ def main():
     root.lift()
     app = Application(master=root)
     app.mainloop()
+
 
 if __name__ == "__main__":
     main()
