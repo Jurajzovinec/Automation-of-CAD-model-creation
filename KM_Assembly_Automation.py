@@ -326,21 +326,18 @@ class CreoAPI:
     def setup(self):
         """Initialization of creo_client object. If creoson application is not running, program ask user to run it manually."""
         try:
+
             self.creo_client.connect()
             logger.info('Creoson is running')
+
         except ConnectionError:
+
             creoson_folder = '.\creoson'
-            try:
-                os.startfile(creoson_folder)
-            except:
-                logger.warning("Creoson folder is not found in app folder.")
-            finally:
-                messagebox.showinfo("Kraussmaffei Assembly Automation", "Creoson is not running. Start Creoson before starting Automation app.")
-                try:
-                    self.creo_client.connect()
-                except:
-                    logger.critical("Creoson is still not running. Exiting application.")
-                    exit()
+            creoson_bat = r"creoson_run.bat"
+
+            os.chdir(creoson_folder)
+            os.startfile(creoson_bat)
+            self.creo_client.connect()
 
     def open_picked_master_model(self):
         creopyson.file_open(self.creo_client, file_=app.list_cad_models.what_is_picked_option())
@@ -1924,5 +1921,16 @@ def main():
     app.mainloop()
 
 
+def start_creoson():
+
+    creoson_folder = r"C:\Users\user\Desktop\Anaconda\creoson"
+    creoson_bat = r"creoson_run.bat"
+
+    os.chdir(creoson_folder)
+    os.startfile(creoson_bat)
+
+    c = creopyson.Client()
+    c.connect()
+
 if __name__ == "__main__":
-    main()
+    start_creoson()
