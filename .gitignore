@@ -2,3 +2,6 @@ dir_to_ignore/creoson
 dir_to_ignore/dist
 dir_to_ignore/build
 dir_to_ignore/.idea
+dir_to_ignore/environment
+*.log
+*.spec

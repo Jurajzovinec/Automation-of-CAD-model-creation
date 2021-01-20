@@ -1,3 +1,0 @@
-pyinstaller -F -w --onefile -i "C:\Users\user\Desktop\AutomationApp\IconPictures\KraussmaffeiLogo.ico" KM_Assembly_Automation.py
-pyinstaller -F -w -i "C:\Users\user\Desktop\AutomationApp\IconPictures\KraussmaffeiLogo.ico" KM_Assembly_Automation.py
-pyinstaller -F -i "C:\Users\user\Desktop\AutomationApp\IconPictures\KraussmaffeiLogo.ico" KM_Assembly_Automation.py

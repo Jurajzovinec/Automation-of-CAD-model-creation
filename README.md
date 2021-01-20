@@ -30,6 +30,7 @@ of models in to master model according to information from ERP system.
  is written in python language, with use of creopyson library by Benjamin C. This core code uses procedural approach.
 
 ## Dependencies and Folders
+
 Except direct dependency on performance of Creoson application, automation of mastermodel has
 several more dependecies.
 * Core application `KM_Assembly_Automation.exe` is dependent to folder it is located in. 
@@ -47,9 +48,22 @@ CAD models had not been assembled to CAD master model.
 * `IconPictures` folder contains icons and picture which are used in graphical user interface of 
 applications
 
+## Setup environment (Windows)
 
+1. Create python venv in this folder with *python -m venv environment* command
+2. Activate venv with >*. environment\Scripts\activate* command or *environment\Scripts\activate*
+3. Install external packages with *pip install -r requirements.txt* command
 
+Alternatively put this sequence into cmd.
 
+*python -m venv environment && environment\Scripts\activate && pip install -r requirements.txt*
+
+## Distribution
+
+Compile to *.exe* with one of the following commands
+* *pyinstaller -F -w --onefile -i (Put path to here)"KraussmaffeiLogo.ico" KM_Assembly_Automation.py*
+* *pyinstaller -F -w -i (Put path to here)"KraussmaffeiLogo.ico" KM_Assembly_Automation.py*
+* *pyinstaller -F -i (Put path to here)"KraussmaffeiLogo.ico" KM_Assembly_Automation.py*
  
 ## Sources
 * creopyson library - https://github.com/Zepmanbc/creopyson

@@ -8,6 +8,7 @@ import time
 import shutil
 import csv
 import threading
+import re
 from difflib import SequenceMatcher
 from PIL import ImageTk, Image
 from tkinter import messagebox
@@ -70,7 +71,7 @@ class Application(tkinter.Frame):
         global order_number_entry
         order_number_entry = tkinter.Entry(self.master)
         order_number_entry.config(width=20, font=('Helvetica', 14), borderwidth=4)
-        order_number_entry.insert(0, '--New_Order_Number--')
+        order_number_entry.insert(0, 'Number')
         order_number_entry.grid(row=11, column=1)
 
     def create_machine_type_list(self):
@@ -131,6 +132,7 @@ class Application(tkinter.Frame):
 
         # For to me unknown reason application did not enabled button with run_button.enable_this_button (even though it works with confirmation button)
         # There for instance of this button is re-created.
+
         self.run_button = CreateControlButton(parent=self, row_grid=13, column_grid=0, command=automation_process, icon_name="run_automation.png")
         self.source_assembly_name = self.list_cad_models.what_is_picked_option()
 
@@ -331,13 +333,13 @@ class CreoAPI:
             logger.info('Creoson is running')
 
         except ConnectionError:
+            pass
+            #creoson_folder = '.\creoson'
+            #creoson_bat = r"creoson_run.bat"
 
-            creoson_folder = '.\creoson'
-            creoson_bat = r"creoson_run.bat"
-
-            os.chdir(creoson_folder)
-            os.startfile(creoson_bat)
-            self.creo_client.connect()
+            #os.chdir(creoson_folder)
+            #os.startfile(creoson_bat)
+            #self.creo_client.connect()
 
     def open_picked_master_model(self):
         creopyson.file_open(self.creo_client, file_=app.list_cad_models.what_is_picked_option())
@@ -382,6 +384,17 @@ class CreoAPI:
                         pass
                     else:
                         self.add_models_in_opened_group_to_bom(level_of_master_model_tree=3)
+            self.check_whether_is_destination_group()
+
+            file_object = open("BOM.txt", "a+")
+
+            for each in self.bill_of_material:
+                if "m" in each["parent"][0:-10].lower() and re.findall("[0-9]{7}", each['name']):
+                    file_object.write(f"GM  {each['name']}  {each['parent']}.\n")
+                if "ze" in each["parent"][0:-4].lower() and re.findall("[0-9]{7}", each['name']):
+                    file_object.write(f"ZE# {each['name']}  {each['parent']}\n")
+                if "sa" in each["parent"][0:-4].lower() and re.findall("[0-9]{7}", each['name']):
+                    file_object.write(f"SA  {each['name']}  {each['parent']}\n")
 
         creopyson.file_open(self.creo_client, file_=current_master_model)
         self.determine_assembly_group_type()
@@ -971,7 +984,6 @@ class CreoAPI:
                     creopyson.file_rename(self.creo_client, file_=every_component['name'], new_name=new_name, onlysession=True)
                     print('this is new model = ' + new_name)
                     logger.info('this is new model = ' + new_name)
-                    # creopyson.file_save(creo_client, file_=new_name)
                 except:
                     logger.exception("message")
                 else:
@@ -1100,8 +1112,6 @@ class CreoAPI:
                 if any(x['name'].lower() == name_of_csy.lower() for x in creopyson.feature_list(self.creo_client, type_='COORDINATE SYSTEM')):
                     continue_after_mapkey = True
 
-            creopyson.file_save(self.creo_client, file_=creopyson.file_get_fileinfo(self.creo_client)['file'])
-
             list_of_coordinate_systems = [subject['name'] for subject in creopyson.feature_list(self.creo_client, type_='COORDINATE SYSTEM')]
 
             return list_of_coordinate_systems
@@ -1127,10 +1137,8 @@ class CreoAPI:
         for each_sap_group in sa_list:
             coordinate_system_name = f'K_{each_sap_group}'.strip().upper()
             list_of_coordinate_systems = self.create_coordinate_system(constraint_to=skeleton_information['csy'], name_of_csy=coordinate_system_name)
-        creopyson.file_save(self.creo_client)
 
         creopyson.file_open(self.creo_client, file_=current_master_model)
-        creopyson.file_save(self.creo_client)
 
         for each_sap_group in sa_list:
             cad_group = machine_type + '_' + each_sap_group + '_' + order_number + '.asm'
@@ -1143,7 +1151,6 @@ class CreoAPI:
                     creopyson.file_rename(self.creo_client, file_="MACHINETYPE_SAGROUP_ORDERNUMBER.ASM", new_name=cad_group, onlysession=True)
                     creopyson.feature_rename(self.creo_client, new_name=coordinate_system_name, name="K_SAGROUP", file_=cad_group)
                     # Newly created model is saved.
-                    creopyson.file_save(self.creo_client)
                     default_csy = creopyson.feature_list(self.creo_client, type_='COORDINATE SYSTEM')[0]['name']
                     creopyson.file_open(self.creo_client, file_=current_master_model)
                     creopyson.file_assemble(self.creo_client, file_=cad_group, into_asm=current_master_model, ref_model=skeleton_information['skel_name'],
@@ -1174,7 +1181,7 @@ class CreoAPI:
             erp_material_number = every_erp_sap_name_cad_group['ERP_number']
             cad_parent_model = every_erp_sap_name_cad_group['CAD_group_name']
             if cad_parent_model != 'Not defined':
-                creopyson.file_open(self.creo_client, file_=cad_parent_model)
+                #creopyson.file_open(self.creo_client, file_=cad_parent_model)
                 self.assemble_model(erp_material_number, cad_parent_model)
 
         creopyson.file_open(self.creo_client, file_=current_master_model)
@@ -1268,8 +1275,6 @@ class CreoAPI:
                                 creopyson.file_open(self.creo_client, file_='MACHINETYPE_SAGROUP_ORDERNUMBER.ASM')
                                 creopyson.file_rename(self.creo_client, file_="MACHINETYPE_SAGROUP_ORDERNUMBER.ASM", new_name=new_name, onlysession=True)
                                 creopyson.feature_rename(self.creo_client, new_name=new_csy_name, name="K_SAGROUP", file_=new_name)
-                                creopyson.file_save(self.creo_client)
-                                # creopyson.file_regenerate(self.creo_client)
                                 # we will also set default CSY of newly created model
                                 default_csy = creopyson.feature_list(self.creo_client, type_='COORDINATE SYSTEM')[0]['name']
                                 # here we can assemble model
@@ -1320,7 +1325,6 @@ class CreoAPI:
             print(sys.exc_info())
 
         creopyson.file_open(self.creo_client, file_=current_master_model)
-        creopyson.file_save(self.creo_client)
 
     def try_to_resume_all(self):
         """Third rebuilt of this function. Experimenting with simple ResumeAll command to make automation more robust"""
@@ -1507,6 +1511,7 @@ class Zs63:
                 each_line.encode("utf-8", "ignore")
                 line_text = str(each_line.encode("utf-8", "ignore"))
                 line_text = line_text.replace("b'", "")
+                line_text = line_text.replace("n'", "")
                 zs_63.append(str(line_text))
 
             # Newly created section where some risky signs will be removed from zs_63.txt - Makes the process more robust
@@ -1555,7 +1560,7 @@ class Zs63:
                     each_split_element = each_split_element.strip()
                     if 6 < len(each_split_element) < 9 and '7' not in each_split_element[0:1] and each_split_element.isnumeric():
                         pair_group_and_number.append(each_split_element)
-                    if 'M' in each_split_element and '.' in each_split_element or 'C' in each_split_element and '.' in each_split_element:
+                    if 'm' in each_split_element and '.' in each_split_element or 'c' in each_split_element and '.' in each_split_element:
                         pair_group_and_number.append(each_split_element)
                 if len(pair_group_and_number) == 2:
                     mat_nr = pair_group_and_number[0]
@@ -1751,14 +1756,6 @@ def automation_process():
         try:
             if len(order_number_entry.get()) == 6:
                 session = CreoAPI()
-                session.create_master_model_bill_of_material_with_suppressed(levels=1)
-                session.filter_assemblies()
-                session.create_master_model_bill_of_material_with_suppressed(levels=3)
-                session.zs_63_pairing()
-                session.remove_unnecessary_material_numbers()
-                session.create_sa_groups()
-                session.set_model_convention_on_the_fly()
-                session.change_order_number()
                 session.create_master_model_bill_of_material_with_suppressed(levels=3)
                 session.zs_63_pairing()
                 session.set_default_view()
@@ -1777,9 +1774,9 @@ def automation_process():
                 session = CreoAPI(open_master=False)
                 #  function loads ZS_63 - this function is must in all cases
                 session.create_master_model_bill_of_material_with_suppressed(levels=3)
-                session.zs_63_pairing()
-                session.remove_unnecessary_material_numbers()
-                session.create_sa_groups()
+                #session.zs_63_pairing()
+                #session.remove_unnecessary_material_numbers()
+                #session.create_sa_groups()
                 session.set_model_convention_on_the_fly()
                 session.create_master_model_bill_of_material_with_suppressed(levels=3)
                 session.zs_63_pairing()
@@ -1788,7 +1785,7 @@ def automation_process():
 
             session.check_non_assembled_models()
             session.configs_manipulation(api_mode=False)
-            session.session_mapkeys(regenerate=True, mc=True, save=True)
+            session.session_mapkeys(regenerate=True, mc=True, save=False)
             tkinter.messagebox.showinfo('Automation status', 'Automation completed ! Wait for the finish of ModelCheck.')
             print('Successful finish of the automation.')
             # Button operations
@@ -1904,9 +1901,12 @@ def compare_with_zs63_file_button():
         run_button.destroy_this_button()
         compare_zs_63_button.destroy_this_button()
 
-    global main_thread
-    main_thread = threading.Thread(target=compare_thread, daemon=True)
-    main_thread.start()
+    #global main_thread
+    #main_thread = threading.Thread(target=compare_thread, daemon=True)
+    #main_thread.start()
+
+    session = CreoAPI(open_master=False)
+    session.create_master_model_bill_of_material_with_suppressed(levels=3)
 
 
 def main():
@@ -1921,16 +1921,5 @@ def main():
     app.mainloop()
 
 
-def start_creoson():
-
-    creoson_folder = r"C:\Users\user\Desktop\Anaconda\creoson"
-    creoson_bat = r"creoson_run.bat"
-
-    os.chdir(creoson_folder)
-    os.startfile(creoson_bat)
-
-    c = creopyson.Client()
-    c.connect()
-
 if __name__ == "__main__":
-    start_creoson()
+    main()
