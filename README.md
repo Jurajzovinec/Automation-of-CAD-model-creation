@@ -1,3 +1,4 @@
+
 # Automation of CAD Model Creation 
 This application is dedicated to creation of CAD master model with use of 
 creoson application and creopyson python library. Implementation of this application
@@ -5,6 +6,8 @@ happened in Kraussmaffei Technologies company, which focuses on
 production of injection moulding machines. Application automates manual 
 process of creation CAD master model. This process is based on assembling 
 of models in to master model according to information from ERP system. 
+
+![MasterModelAutotion](https://user-images.githubusercontent.com/55842933/116037766-d4af4d00-a668-11eb-887e-d74384cf8d79.PNG)
 
 ## Table of Contents
 
