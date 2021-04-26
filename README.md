@@ -51,7 +51,7 @@ applications
 ## Setup environment (Windows)
 
 1. Create python venv in this folder with *python -m venv environment* command
-2. Activate venv with >*. environment\Scripts\activate* command or *environment\Scripts\activate*
+2. Activate venv with *environment\Scripts\activate* command or *environment\Scripts\activate*
 3. Install external packages with *pip install -r requirements.txt* command
 
 Alternatively put this sequence into cmd.
