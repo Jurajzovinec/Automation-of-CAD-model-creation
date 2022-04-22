@@ -3,7 +3,7 @@ chardet==4.0.0
 creopyson==0.4.2
 idna==2.10
 Pillow==8.1.0
-PyPDF2==1.26.0
+PyPDF2==1.27.5
 requests==2.25.1
 urllib3==1.26.2
 xlrd==1.2.0
